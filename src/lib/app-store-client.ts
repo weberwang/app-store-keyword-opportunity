@@ -1,5 +1,5 @@
 import scraper from "app-store-scraper";
-import type { AppInfo, SuggestionItem } from "../types";
+import type { AppInfo, SuggestionItem } from "../types.js";
 
 function toNum(value: unknown, fallback = 0): number {
   const parsed = Number(value);

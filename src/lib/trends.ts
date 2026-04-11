@@ -1,13 +1,13 @@
 // 实时热度分析：基于 iTunes RSS 榜单 + 快照对比
 
-import { normalizeTerm } from "./text";
+import { normalizeTerm } from "./text.js";
 import type {
   ChartApp,
   ChartTrendResult,
   KeywordResult,
   Snapshot,
   TrendResult,
-} from "../types";
+} from "../types.js";
 
 export const CHART_TYPES: Record<string, { key: string; label: string }> = {
   "top-free": { key: "topfreeapplications", label: "免费榜 Top" },
@@ -164,7 +164,7 @@ export function compareSnapshots(
   oldSnapshot: Snapshot,
   newSnapshot: Snapshot,
 ): any[] {
-  const oldMap = new Map(
+  const oldMap = new Map<string, KeywordResult>(
     (oldSnapshot.keywords || []).map((kw) => [kw.normalized || kw.term, kw]),
   );
 

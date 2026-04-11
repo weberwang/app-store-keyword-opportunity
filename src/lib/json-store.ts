@@ -1,6 +1,6 @@
 import { readFile, mkdir, writeFile } from "fs/promises";
 import { dirname } from "path";
-import type { Snapshot } from "../types";
+import type { Snapshot } from "../types.js";
 
 const EMPTY_SNAPSHOT: Snapshot = {
   meta: {

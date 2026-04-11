@@ -1,18 +1,18 @@
 // 多国市场横向对比
 
 import pLimitModule from "p-limit";
-import { searchApps } from "./app-store-client";
+import { searchApps } from "./app-store-client.js";
 import {
   computeCompetitionScore,
   computeDemandScore,
   computeOpportunityScore,
-} from "./scoring";
+} from "./scoring.js";
 import type {
   CountryCompareResult,
   CountryScore,
   CountrySummary,
   TermSummary,
-} from "../types";
+} from "../types.js";
 
 const pLimit = (pLimitModule as any).default || pLimitModule;
 

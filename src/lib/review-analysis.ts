@@ -2,12 +2,12 @@
 
 import scraper from "app-store-scraper";
 import pLimitModule from "p-limit";
-import { normalizeTerm } from "./text";
+import { normalizeTerm } from "./text.js";
 import type {
   ReviewAnalysisResult,
   AppReviewSummary,
   ReviewWord,
-} from "../types";
+} from "../types.js";
 
 const pLimit = (pLimitModule as any).default || pLimitModule;
 

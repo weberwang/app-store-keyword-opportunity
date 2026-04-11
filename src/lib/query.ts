@@ -1,6 +1,6 @@
 import Fuse from "fuse.js";
-import { normalizeTerm, toCsvList, toNumber } from "./text";
-import type { KeywordResult, QueryFilters, Snapshot } from "../types";
+import { normalizeTerm, toCsvList, toNumber } from "./text.js";
+import type { KeywordResult, QueryFilters, Snapshot } from "../types.js";
 
 interface ResolvedFilters {
   q: string;

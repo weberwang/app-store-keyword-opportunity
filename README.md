@@ -1,74 +1,109 @@
-# App Store Keyword Opportunity
+# app-store-keyword-opportunity
 
-一个基于 TypeScript 的 App Store 关键词机会分析工具，既可以作为交互式 CLI 使用，也可以作为 MCP Server 接入 Claude Desktop、Cursor 等支持 MCP 的客户端。
+> GitHub: https://github.com/weberwang/app-store-keyword-opportunity
 
-它的目标不是给出 Apple 官方搜索量，而是用公开可获取的数据做一套可操作的代理分析：
+一个面向 App Store 关键词机会挖掘的 MCP server。它把公开可获取的 App Store 数据组织成一组可调用工具，用来完成关键词机会分析、榜单热度分析、竞品评论分析、多国市场对比和产品策略推导。
 
-- 关键词机会挖掘：需求分、竞争分、机会分
-- 榜单热度分析：热词、分类热度、变现格局
-- 竞品评论分析：差评痛点、好评卖点
-- 多国市场对比：找到更适合切入的地区
-- 产品策略报告：把关键词结果转成研发方向和产品路线图
+## Tools
 
-## 使用方式
+| Tool | Description |
+| --- | --- |
+| `search_keywords` | 从种子词采集关键词机会快照，并默认保存到 `DATA_FILE` |
+| `query_keywords` | 从本地快照文件查询、筛选关键词 |
+| `fetch_chart` | 拉取 iTunes App Store 榜单 |
+| `analyze_chart` | 分析榜单热词、品类热度和变现结构 |
+| `analyze_reviews` | 提取竞品评论中的差评痛点和好评卖点 |
+| `compare_countries` | 横向比较多个国家市场的切入机会 |
+| `build_strategy` | 从关键词快照生成产品策略报告 |
 
-### CLI
+## Setup
 
-适合手动探索和本地分析。
-
-支持的命令：
-
-- `menu`：交互式主菜单
-- `collect`：采集关键词快照
-- `query`：筛选关键词
-- `trend`：实时榜单热度分析
-- `compare`：快照对比
-- `strategy`：产品策略报告
-- `review`：竞品评论情感分析
-- `country-compare`：多国市场对比
-
-### MCP Server
-
-适合把整个项目作为工具服务接入 AI 客户端，通过对话直接调用能力。
-
-当前暴露的 MCP 工具：
-
-- `search_keywords`：采集关键词机会数据
-- `query_keywords`：查询本地快照文件
-- `fetch_chart`：拉取 iTunes 榜单
-- `analyze_chart`：分析榜单热词和分类热度
-- `analyze_reviews`：分析竞品评论痛点和卖点
-- `compare_countries`：多国市场横向对比
-- `build_strategy`：生成产品策略报告
-
-## 快速开始
-
-安装依赖并编译：
+无需本地发布到 npm，直接从 GitHub 运行：
 
 ```bash
+npx github:weberwang/app-store-keyword-opportunity
+```
+
+或者 clone 到本地后编译运行：
+
+```bash
+git clone https://github.com/weberwang/app-store-keyword-opportunity.git
+cd app-store-keyword-opportunity
 npm install
 npm run build
 ```
 
-启动交互式菜单：
+## Required Environment
 
-```bash
-npm run menu
+这个 server 不依赖第三方私有 API key，直接使用公开可访问的 App Store / iTunes 数据。
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `OUTPUT_DIR` | Optional | 输出目录，默认 `./data` |
+| `DATA_FILE` | Optional | 关键词快照文件，默认 `OUTPUT_DIR/keywords.json` |
+
+默认情况下：
+
+- `search_keywords` 会把采集结果保存到 `DATA_FILE`
+- `query_keywords` 和 `build_strategy` 会默认读取 `DATA_FILE`
+
+## VS Code MCP Config
+
+把下面内容加到 `.vscode/mcp.json`：
+
+```json
+{
+	"servers": {
+		"app-store-keyword": {
+			"type": "stdio",
+			"command": "npx",
+			"args": ["-y", "github:weberwang/app-store-keyword-opportunity"],
+			"env": {
+				"OUTPUT_DIR": "${workspaceFolder}/data",
+				"DATA_FILE": "${workspaceFolder}/data/keywords.json"
+			}
+		}
+	}
+}
 ```
 
-推荐首次使用流程：
+如果你已经把仓库 clone 到本地，使用 `node` 直接启动构建产物：
 
-1. `采集关键词数据`
-2. `查询与筛选结果`
-3. `产品策略报告`
-4. `竞品评论情感分析`
+```json
+{
+	"servers": {
+		"app-store-keyword": {
+			"type": "stdio",
+			"command": "node",
+			"args": ["/path/to/app-store-keyword-opportunity/build/index.js"],
+			"env": {
+				"OUTPUT_DIR": "${workspaceFolder}/data",
+				"DATA_FILE": "${workspaceFolder}/data/keywords.json"
+			}
+		}
+	}
+}
+```
 
-## 常用命令
+Windows 本地示例：
+
+```json
+{
+	"servers": {
+		"app-store-keyword": {
+			"type": "stdio",
+			"command": "node",
+			"args": ["D:/Projects/nodejs/app-store-keyword-opportunity/build/index.js"]
+		}
+	}
+}
+```
+
+## CLI
+
+项目仍然保留本地 CLI，适合手动分析：
 
 ```bash
-npm run build
-npm run typecheck
-
 npm run menu
 npm run collect
 npm run query
@@ -77,79 +112,36 @@ npm run compare
 npm run strategy
 npm run review
 npm run country-compare
-
-npm run mcp
 ```
 
-说明：
+## Workflow Order
 
-- `npm run build`：将 TypeScript 编译到 `dist/`
-- `npm run typecheck`：只做类型检查，不生成产物
-- `npm run mcp`：运行 MCP Server
-- `npm start`：会先编译，再启动 MCP Server
-
-## MCP 接入
-
-先构建：
-
-```bash
-npm run build
+```text
+search_keywords  ->  query_keywords  ->  build_strategy
+			 ↓
+	fetch_chart / analyze_chart
+			 ↓
+	analyze_reviews
+			 ↓
+	compare_countries
 ```
 
-然后在 MCP 客户端中配置：
-
-```json
-{
-	"mcpServers": {
-		"app-store-keyword": {
-			"command": "node",
-			"args": ["/absolute/path/to/app-store-keyword-opportunity/dist/mcp.js"]
-		}
-	}
-}
-```
-
-Windows 示例：
-
-```json
-{
-	"mcpServers": {
-		"app-store-keyword": {
-			"command": "node",
-			"args": ["C:/path/to/app-store-keyword-opportunity/dist/mcp.js"]
-		}
-	}
-}
-```
-
-几个典型的 MCP 使用场景：
+推荐的典型使用场景：
 
 - “帮我找美国健康健美分类里机会分最高的 habit tracker 相关关键词”
 - “分析美国免费榜的热词和分类热度”
 - “比较 habit tracker 在 US、JP、DE 的切入机会”
-- “根据当前快照给出一个产品路线图”
+- “根据当前快照生成一个产品路线图”
 
-## 环境变量
-
-可选配置见 `.env.example`：
-
-```bash
-DATA_FILE=./data/keywords.json
-```
-
-说明：
-
-- `DATA_FILE` 是本地快照默认输出路径
-- `data/keywords.json` 是运行产物，已加入 `.gitignore`
-
-## 项目结构
+## Project Structure
 
 ```text
 src/
+	index.ts
 	cli.ts
-	mcp.ts
 	types.ts
 	lib/
+		env.ts
 		app-store-client.ts
 		collector.ts
 		query.ts
@@ -160,15 +152,23 @@ src/
 		country-compare.ts
 		json-store.ts
 		text.ts
+	tools/
+		common.ts
+		search-keywords.ts
+		query-keywords.ts
+		charts.ts
+		reviews.ts
+		country-compare.ts
+		strategy.ts
 data/
 	.gitkeep
 ```
 
-## 设计说明
+## Notes
 
 - 需求分、竞争分、机会分都是代理指标，不是 Apple 官方搜索量
-- 榜单和搜索依赖公开接口，偶发限流或波动属于正常现象
-- 评论分析目前基于高频词和评分分桶，不是完整 NLP 情感模型
+- 榜单和搜索依赖公开接口，偶发限流或结果波动属于正常现象
+- 评论分析基于评论文本和评分分桶，不是完整 NLP 模型
 - 多国对比适合做市场优先级判断，不适合作为绝对流量预测
 
 ## 提交建议

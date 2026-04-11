@@ -3,23 +3,24 @@ import "dotenv/config";
 import path from "path";
 import { Command } from "commander";
 import inquirer from "inquirer";
+import { env } from "./lib/env.js";
 
-import { collectKeywordSnapshot } from "./lib/collector";
-import { readSnapshot, writeSnapshot } from "./lib/json-store";
-import { queryKeywords } from "./lib/query";
+import { collectKeywordSnapshot } from "./lib/collector.js";
+import { readSnapshot, writeSnapshot } from "./lib/json-store.js";
+import { queryKeywords } from "./lib/query.js";
 import {
   analyzeChartTrends,
   fetchChart,
   enrichSnapshotWithTrends,
   compareSnapshots,
   CHART_TYPES,
-} from "./lib/trends";
-import { buildProductStrategy } from "./lib/insight";
-import { analyzeCompetitorReviews } from "./lib/review-analysis";
-import { compareAcrossCountries } from "./lib/country-compare";
+} from "./lib/trends.js";
+import { buildProductStrategy } from "./lib/insight.js";
+import { analyzeCompetitorReviews } from "./lib/review-analysis.js";
+import { compareAcrossCountries } from "./lib/country-compare.js";
 
 const program = new Command();
-const defaultDataFile = path.resolve(__dirname, "..", "data", "keywords.json");
+const defaultDataFile = env.dataFile;
 
 interface Choice {
   name: string;

@@ -5,7 +5,7 @@ import type {
   KeywordResult,
   MarketInsight,
   ProductStrategy,
-} from "../types";
+} from "../types.js";
 
 const STALE_MONTHS = 12;
 

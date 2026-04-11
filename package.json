@@ -2,23 +2,55 @@
   "name": "app-store-keyword-opportunity",
   "version": "0.2.0",
   "description": "MVP for discovering App Store keywords with high demand and low competition.",
-  "private": true,
-  "main": "dist/mcp.js",
+  "type": "module",
+  "author": "weberwang <for.js221@gmail.com>",
+  "license": "UNLICENSED",
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "app-store",
+    "app-store-optimization",
+    "aso",
+    "keyword-research",
+    "ios",
+    "typescript"
+  ],
+  "bin": {
+    "app-store-keyword-opportunity": "./build/index.js"
+  },
+  "files": [
+    "build",
+    "README.md"
+  ],
+  "main": "./build/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/weberwang/app-store-keyword-opportunity.git"
+  },
+  "homepage": "https://github.com/weberwang/app-store-keyword-opportunity#readme",
+  "bugs": {
+    "url": "https://github.com/weberwang/app-store-keyword-opportunity/issues"
+  },
   "scripts": {
     "build": "tsc",
-    "build:watch": "tsc --watch",
-    "prestart": "tsc",
-    "start": "node dist/mcp.js",
-    "mcp": "node dist/mcp.js",
-    "menu": "node dist/cli.js",
-    "collect": "node dist/cli.js collect",
-    "query": "node dist/cli.js query",
-    "trend": "node dist/cli.js trend",
-    "compare": "node dist/cli.js compare",
-    "strategy": "node dist/cli.js strategy",
-    "review": "node dist/cli.js review",
-    "country-compare": "node dist/cli.js country-compare",
-    "dev": "node --watch dist/mcp.js",
+    "dev": "tsc --watch",
+    "prepack": "npm run build",
+    "prepare": "npm run build",
+    "start": "node build/index.js",
+    "mcp": "node build/index.js",
+    "menu": "node build/cli.js",
+    "collect": "node build/cli.js collect",
+    "query": "node build/cli.js query",
+    "trend": "node build/cli.js trend",
+    "compare": "node build/cli.js compare",
+    "strategy": "node build/cli.js strategy",
+    "review": "node build/cli.js review",
+    "country-compare": "node build/cli.js country-compare",
+    "inspector": "npx @modelcontextprotocol/inspector node build/index.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

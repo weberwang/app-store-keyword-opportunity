@@ -1,10 +1,10 @@
-import { normalizeTerm, overlapRatio } from "./text";
+import { normalizeTerm, overlapRatio } from "./text.js";
 import type {
   AppInfo,
   CompetitionMetrics,
   DemandInput,
   OpportunityInput,
-} from "../types";
+} from "../types.js";
 
 function clamp(value: number, min = 0, max = 1): number {
   return Math.min(max, Math.max(min, value));

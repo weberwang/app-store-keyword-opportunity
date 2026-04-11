@@ -3,21 +3,21 @@ import {
   fetchAppDetails,
   fetchSuggestions,
   searchApps,
-} from "./app-store-client";
+} from "./app-store-client.js";
 import {
   computeCompetitionScore,
   computeDemandScore,
   computeOpportunityScore,
   computeRelevanceScore,
-} from "./scoring";
-import { computeMarketInsight } from "./insight";
-import { normalizeTerm, uniqueTerms } from "./text";
+} from "./scoring.js";
+import { computeMarketInsight } from "./insight.js";
+import { normalizeTerm, uniqueTerms } from "./text.js";
 import type {
   AppInfo,
   CollectOptions,
   KeywordResult,
   Snapshot,
-} from "../types";
+} from "../types.js";
 
 const pLimit = (pLimitModule as any).default || pLimitModule;
 
