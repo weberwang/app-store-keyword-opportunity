@@ -1,0 +1,38 @@
+{
+  "name": "app-store-keyword-opportunity",
+  "version": "0.2.0",
+  "description": "MVP for discovering App Store keywords with high demand and low competition.",
+  "private": true,
+  "main": "dist/mcp.js",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "prestart": "tsc",
+    "start": "node dist/mcp.js",
+    "mcp": "node dist/mcp.js",
+    "menu": "node dist/cli.js",
+    "collect": "node dist/cli.js collect",
+    "query": "node dist/cli.js query",
+    "trend": "node dist/cli.js trend",
+    "compare": "node dist/cli.js compare",
+    "strategy": "node dist/cli.js strategy",
+    "review": "node dist/cli.js review",
+    "country-compare": "node dist/cli.js country-compare",
+    "dev": "node --watch dist/mcp.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "app-store-scraper": "^0.18.0",
+    "commander": "^14.0.3",
+    "dotenv": "^17.4.1",
+    "fuse.js": "^7.3.0",
+    "inquirer": "^8.2.7",
+    "p-limit": "^7.3.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.2"
+  }
+}
