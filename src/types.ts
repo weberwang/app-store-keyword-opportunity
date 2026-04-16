@@ -29,6 +29,8 @@ export interface CompetitionMetrics {
   medianReviewCount: number;
   top3ReviewSum: number;
   averageTopRating: number;
+  topDeveloperShare: number;
+  top3AppConcentration: number;
 }
 
 export interface DemandInput {
@@ -41,6 +43,8 @@ export interface OpportunityInput {
   demandScore: number;
   competitionScore: number;
   relevanceScore: number;
+  monetizationScore?: number;
+  marketGapScore?: number;
 }
 
 // ─── 洞察 ─────────────────────────────────────────────────────────────────────
@@ -83,6 +87,8 @@ export interface KeywordResult {
   relevanceScore: number;
   demandScore: number;
   competitionScore: number;
+  monetizationScore: number;
+  marketGapScore: number;
   opportunityScore: number;
   metrics: CompetitionMetrics;
   insight: MarketInsight;
@@ -154,6 +160,8 @@ export interface QueryFilters {
   minOpportunity?: number;
   maxCompetition?: number;
   minDemand?: number;
+  minMonetization?: number;
+  minMarketGap?: number;
   maxTitleMatches?: number;
   maxMedianReviews?: number;
   limit?: number;

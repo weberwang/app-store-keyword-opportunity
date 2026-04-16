@@ -84,6 +84,8 @@ export function registerSearchKeywordTools(server: McpServer): void {
           opportunityScore: kw.opportunityScore,
           demandScore: kw.demandScore,
           competitionScore: kw.competitionScore,
+          monetizationScore: kw.monetizationScore,
+          marketGapScore: kw.marketGapScore,
           relevanceScore: kw.relevanceScore,
           country: kw.country,
           topApps: kw.topApps.slice(0, 3).map((a) => ({

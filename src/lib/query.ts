@@ -12,6 +12,8 @@ interface ResolvedFilters {
   minOpportunity: number | undefined;
   maxCompetition: number | undefined;
   minDemand: number | undefined;
+  minMonetization: number | undefined;
+  minMarketGap: number | undefined;
   maxTitleMatches: number | undefined;
   maxMedianReviews: number | undefined;
   limit: number;
@@ -29,6 +31,8 @@ function buildFilters(input: QueryFilters = {}): ResolvedFilters {
     minOpportunity: toNumber(input.minOpportunity),
     maxCompetition: toNumber(input.maxCompetition),
     minDemand: toNumber(input.minDemand),
+    minMonetization: toNumber(input.minMonetization),
+    minMarketGap: toNumber(input.minMarketGap),
     maxTitleMatches: toNumber(input.maxTitleMatches),
     maxMedianReviews: toNumber(input.maxMedianReviews),
     limit: toNumber(input.limit) ?? 20,
@@ -114,6 +118,16 @@ export function queryKeywords(
   if (filters.minDemand !== undefined) {
     items = items.filter(
       (item) => Number(item.demandScore) >= filters.minDemand!,
+    );
+  }
+  if (filters.minMonetization !== undefined) {
+    items = items.filter(
+      (item) => Number(item.monetizationScore || 0) >= filters.minMonetization!,
+    );
+  }
+  if (filters.minMarketGap !== undefined) {
+    items = items.filter(
+      (item) => Number(item.marketGapScore || 0) >= filters.minMarketGap!,
     );
   }
   if (filters.maxTitleMatches !== undefined) {

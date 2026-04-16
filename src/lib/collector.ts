@@ -7,6 +7,8 @@ import {
 import {
   computeCompetitionScore,
   computeDemandScore,
+  computeMarketGapScore,
+  computeMonetizationScore,
   computeOpportunityScore,
   computeRelevanceScore,
 } from "./scoring.js";
@@ -114,12 +116,16 @@ async function analyzeCandidate(
     candidate.term,
     topApps,
   );
+  const monetizationScore = computeMonetizationScore(topApps);
+  const insight = computeMarketInsight(candidate.term, topApps);
+  const marketGapScore = computeMarketGapScore(insight.summary);
   const opportunityScore = computeOpportunityScore({
     demandScore,
     competitionScore,
     relevanceScore,
+    monetizationScore,
+    marketGapScore,
   });
-  const insight = computeMarketInsight(candidate.term, topApps);
 
   return {
     term: candidate.term,
@@ -132,6 +138,8 @@ async function analyzeCandidate(
     relevanceScore,
     demandScore,
     competitionScore,
+    monetizationScore,
+    marketGapScore,
     opportunityScore,
     metrics,
     insight,
