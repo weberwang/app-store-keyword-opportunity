@@ -1,277 +1,150 @@
-// ─── App Store 数据结构 ────────────────────────────────────────────────────────
+export const discoveryModes = ["trend", "keyword", "replacement"] as const;
+export type DiscoveryMode = (typeof discoveryModes)[number];
 
-export interface AppInfo {
-  id: string;
-  title: string;
-  url: string;
-  developer: string;
-  developerId: string;
-  genre: string;
-  score: number;
-  reviews: number;
-  price: number;
-  free: boolean;
-  contentRating: string | null;
-  releasedAt: string | null;
-  updatedAt: string | null;
-  description: string | null;
+export const evidenceDimensions = [
+	"demand",
+	"competition",
+	"marketGap",
+	"painIntensity",
+	"monetizationPotential",
+	"trendMomentum",
+	"regionalFit",
+	"supplyFreshness",
+	"replacementPressure",
+	"implementationFeasibility",
+	"risk",
+] as const;
+export type EvidenceDimension = (typeof evidenceDimensions)[number];
+
+export const decisionTiers = [
+	"pursue-now",
+	"validate-next",
+	"monitor",
+	"discard",
+] as const;
+export type DecisionTier = (typeof decisionTiers)[number];
+
+export interface DimensionAssessment {
+	score: number;
+	summary: string;
+	evidence: string[];
+	missing: boolean;
 }
 
-export interface SuggestionItem {
-  term: string;
-  rank: number;
+export type DimensionMap = Record<EvidenceDimension, DimensionAssessment>;
+
+export interface EvidenceTrace {
+	claim: string;
+	dimensions: EvidenceDimension[];
 }
 
-// ─── 评分 / 打分 ───────────────────────────────────────────────────────────────
-
-export interface CompetitionMetrics {
-  exactTitleMatches: number;
-  medianReviewCount: number;
-  top3ReviewSum: number;
-  averageTopRating: number;
-  topDeveloperShare: number;
-  top3AppConcentration: number;
+export interface OpportunityBrief {
+	headline: string;
+	targetUser: string;
+	coreProblem: string;
+	appConcept: string;
+	supportingEvidenceSummary: string[];
+	competitiveFraming: string;
+	monetizationHypothesis: string;
+	primaryRisks: string[];
+	nextValidationSteps: string[];
+	evidenceTrace: EvidenceTrace[];
+	rejectionReasons: string[];
 }
 
-export interface DemandInput {
-  bestRank: number | null;
-  suggestionCount: number;
-  resultCount: number;
+export interface RankedCandidate {
+	id: string;
+	mode: DiscoveryMode;
+	title: string;
+	targetUser: string;
+	coreProblem: string;
+	appConcept: string;
+	opportunityShape: string;
+	seed: string;
+	region: string;
+	evidence: DimensionMap;
+	missingDimensions: EvidenceDimension[];
+	attractiveness: number;
+	confidence: number;
+	decisionTier: DecisionTier;
+	brief: OpportunityBrief;
 }
 
-export interface OpportunityInput {
-  demandScore: number;
-  competitionScore: number;
-  relevanceScore: number;
-  monetizationScore?: number;
-  marketGapScore?: number;
+export interface WorkflowResult {
+	mode: DiscoveryMode;
+	generatedAt: string;
+	candidates: RankedCandidate[];
 }
 
-// ─── 洞察 ─────────────────────────────────────────────────────────────────────
-
-export interface MarketInsightSummary {
-  appCount: number;
-  freeCount: number;
-  paidCount: number;
-  avgScore: number;
-  uniqueDevs: number;
-  staleCount: number;
-  qualityGap: boolean;
-  topDeveloper: string | null;
-  topDeveloperAppCount: number;
+export interface TrendSignalInput {
+	label: string;
+	targetUser: string;
+	coreProblem: string;
+	region?: string;
+	chartMomentum?: number;
+	categoryAcceleration?: number;
+	reviewMomentum?: number;
+	monetizationShift?: number;
+	timeSensitivity?: number;
+	distributionChange?: number;
+	competition?: number;
+	painIntensity?: number;
+	marketGap?: number;
+	monetizationPotential?: number;
+	regionalFit?: number;
+	implementationFeasibility?: number;
+	risk?: number;
+	durability?: number;
+	corroboratingSignals?: string[];
+	opportunityShape?: string;
 }
 
-export interface MarketInsight {
-  summary?: MarketInsightSummary;
-  hints: string[];
+export interface KeywordSeedInput {
+	seed: string;
+	targetUser: string;
+	coreProblem: string;
+	region?: string;
+	baseDemand?: number;
+	baseCompetition?: number;
+	basePainIntensity?: number;
+	baseMonetizationPotential?: number;
+	baseRegionalFit?: number;
+	intents?: string[];
+	personas?: string[];
+	workflowSlices?: string[];
+	relatedProblems?: string[];
 }
 
-// ─── 快照 ─────────────────────────────────────────────────────────────────────
-
-export interface TrendResult {
-  trendScore: number;
-  bestCompetitorRank: number | null;
-  competitorRankCount: number;
-  titleMatchRanks: number[];
-  titleMatchCount: number;
+export interface ReplacementAppInput {
+	appName: string;
+	category: string;
+	targetUser: string;
+	coreProblem: string;
+	region?: string;
+	ongoingDemandVisibility?: number;
+	reviewActivity?: number;
+	updateStagnationMonths?: number;
+	uxFreshness?: number;
+	unresolvedComplaintIntensity?: number;
+	modernAlternativeRequests?: number;
+	lockInStrength?: number;
+	monetizationPotential?: number;
+	competition?: number;
+	regionalFit?: number;
+	implementationFeasibility?: number;
+	risk?: number;
 }
 
-export interface KeywordResult {
-  term: string;
-  normalized: string;
-  country: string;
-  seeds: string[];
-  bestSuggestionRank: number | null;
-  suggestionCount: number;
-  sourceCount: number;
-  relevanceScore: number;
-  demandScore: number;
-  competitionScore: number;
-  monetizationScore: number;
-  marketGapScore: number;
-  opportunityScore: number;
-  metrics: CompetitionMetrics;
-  insight: MarketInsight;
-  topApps: AppInfo[];
-  trend?: TrendResult;
+export interface WorkflowRequest {
+	mode: DiscoveryMode;
+	topN?: number;
+	trendSignals?: TrendSignalInput[];
+	keywordSeed?: KeywordSeedInput;
+	replacementApps?: ReplacementAppInput[];
 }
 
-export interface SnapshotMeta {
-  generatedAt: string | null;
-  country: string;
-  language: string;
-  seeds: string[];
-  genreId?: string;
-  totalKeywords: number;
-}
-
-export interface Snapshot {
-  meta: SnapshotMeta;
-  keywords: KeywordResult[];
-}
-
-// ─── 榜单 ─────────────────────────────────────────────────────────────────────
-
-export interface ChartApp {
-  rank: number;
-  id: string;
-  title: string;
-  developer: string;
-  category: string;
-  price: number;
-  releaseDate: string | null;
-  chartType?: string;
-}
-
-export interface ChartWord {
-  word: string;
-  count: number;
-  bestRank: number | null;
-  exampleApps: string[];
-}
-
-export interface ChartCategory {
-  category: string;
-  count: number;
-  ratio: number;
-}
-
-export interface ChartTrendResult {
-  totalApps: number;
-  fetchedAt: string;
-  topCategories: ChartCategory[];
-  topWords: ChartWord[];
-  monetization: {
-    freeCount: number;
-    paidCount: number;
-    avgPaidPrice: number;
-  };
-}
-
-// ─── 查询 ─────────────────────────────────────────────────────────────────────
-
-export interface QueryFilters {
-  q?: string;
-  country?: string;
-  category?: string;
-  include?: string | string[];
-  requireAll?: string | string[];
-  exclude?: string | string[];
-  minOpportunity?: number;
-  maxCompetition?: number;
-  minDemand?: number;
-  minMonetization?: number;
-  minMarketGap?: number;
-  maxTitleMatches?: number;
-  maxMedianReviews?: number;
-  limit?: number;
-  sortBy?: "opportunity" | "competition" | "demand";
-}
-
-// ─── 评论分析 ─────────────────────────────────────────────────────────────────
-
-export interface ReviewWord {
-  word: string;
-  count: number;
-}
-
-export interface AppReviewSummary {
-  id: string;
-  title: string;
-  reviewsFetched: number;
-  positiveCount: number;
-  negativeCount: number;
-  avgScore: number | null;
-  totalRatings: number | null;
-}
-
-export interface ReviewAnalysisResult {
-  appSummaries: AppReviewSummary[];
-  painPoints: ReviewWord[];
-  sellingPoints: ReviewWord[];
-  painExamples: Map<string, string>;
-  ratingHistogram: Record<number, number>;
-  totalRatings: number;
-  reviewsFetched: number;
-  country: string;
-  analyzedAt: string;
-}
-
-// ─── 多国对比 ─────────────────────────────────────────────────────────────────
-
-export interface CountryScore {
-  country: string;
-  term: string;
-  resultCount?: number;
-  demandScore: number;
-  competitionScore: number;
-  opportunityScore: number;
-  freeRatio?: number;
-  avgAppScore?: number;
-  metrics?: CompetitionMetrics;
-  topApp?: { title: string; score: number; developer: string } | null;
-  empty: boolean;
-  error?: boolean;
-}
-
-export interface TermSummary {
-  term: string;
-  bestCountry: string;
-  bestOpportunityScore: number;
-  worstCountry: string;
-  countryResults: CountryScore[];
-  spread: number;
-}
-
-export interface CountrySummary {
-  country: string;
-  avgOpportunity: number;
-  avgCompetition: number;
-  avgAppScore: number;
-  count: number;
-}
-
-export interface CountryCompareResult {
-  termSummaries: TermSummary[];
-  countrySummaries: CountrySummary[];
-  flat: CountryScore[];
-  analyzedAt: string;
-}
-
-// ─── 策略报告 ─────────────────────────────────────────────────────────────────
-
-export interface RoadmapStage {
-  phase: string;
-  actions: string[];
-}
-
-export interface ProductStrategy {
-  opportunities: {
-    qualityGap: KeywordResult[];
-    staleMarket: KeywordResult[];
-    blueOcean: KeywordResult[];
-    dominated: KeywordResult[];
-  };
-  monetizationModel: string;
-  monetizationReason: string;
-  positioningHints: string[];
-  roadmap: RoadmapStage[];
-  meta: {
-    totalKeywords: number;
-    avgOpportunityScore: number;
-    topOpportunityTerm: string;
-  };
-}
-
-// ─── 采集参数 ─────────────────────────────────────────────────────────────────
-
-export interface CollectOptions {
-  seeds?: string | string[];
-  country?: string;
-  language?: string;
-  genreId?: string;
-  suggestionsLimit?: number;
-  resultsLimit?: number;
-  detailLimit?: number;
-  concurrency?: number;
+export interface SkillWorkflowResponse {
+	overview: string;
+	recommendedPrompts: string[];
+	candidates: RankedCandidate[];
 }

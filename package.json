@@ -1,7 +1,7 @@
 {
   "name": "app-store-keyword-opportunity",
-  "version": "0.2.0",
-  "description": "MVP for discovering App Store keywords with high demand and low competition.",
+  "version": "0.3.0",
+  "description": "Three-path AI workflow for discovering high-value App topics via trend, keyword, and replacement discovery.",
   "type": "module",
   "author": "weberwang <for.js221@gmail.com>",
   "license": "UNLICENSED",
@@ -10,20 +10,36 @@
     "mcp-server",
     "model-context-protocol",
     "app-store",
-    "app-store-optimization",
-    "aso",
-    "keyword-research",
-    "ios",
+    "app-ideas",
+    "trend-discovery",
+    "keyword-discovery",
+    "replacement-opportunity",
     "typescript"
   ],
   "bin": {
-    "app-store-keyword-opportunity": "./build/index.js"
+  "app-store-keyword-opportunity": "./build/index.js",
+  "app-store-keyword-opportunity-cli": "./build/cli.js"
   },
   "files": [
-    "build",
+  "build/*.js",
+  "build/*.d.ts",
     "README.md"
   ],
-  "main": "./build/index.js",
+  "main": "./build/api.js",
+  "types": "./build/api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/api.d.ts",
+      "import": "./build/api.js"
+    },
+    "./samples": {
+      "types": "./build/samples.d.ts",
+      "import": "./build/samples.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "packageManager": "npm@10.8.2",
+  "sideEffects": false,
   "engines": {
     "node": ">=20"
   },
@@ -39,28 +55,20 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "prepack": "npm run build",
+  "prepublishOnly": "npm run validate",
     "prepare": "npm run build",
     "start": "node build/index.js",
     "mcp": "node build/index.js",
-    "menu": "node build/cli.js",
-    "collect": "node build/cli.js collect",
-    "query": "node build/cli.js query",
-    "trend": "node build/cli.js trend",
-    "compare": "node build/cli.js compare",
-    "strategy": "node build/cli.js strategy",
-    "review": "node build/cli.js review",
-    "country-compare": "node build/cli.js country-compare",
+    "cli": "node build/cli.js",
+    "sample:trend": "node build/cli.js sample trend",
+    "sample:keyword": "node build/cli.js sample keyword",
+    "sample:replacement": "node build/cli.js sample replacement",
     "inspector": "npx @modelcontextprotocol/inspector node build/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "validate": "npm run build && node --test build/tests/workflow.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "app-store-scraper": "^0.18.0",
-    "commander": "^14.0.3",
-    "dotenv": "^17.4.1",
-    "fuse.js": "^7.3.0",
-    "inquirer": "^8.2.7",
-    "p-limit": "^7.3.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

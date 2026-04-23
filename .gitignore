@@ -1,5 +1,6 @@
 node_modules/
 dist/
+build/
 .env
 .vscode/
 .playwright-mcp/
@@ -16,3 +17,5 @@ pnpm-debug.log*
 
 # local packaging artifacts
 *.tgz
+openspec*
+opsx*
