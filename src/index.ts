@@ -5,6 +5,7 @@ import * as z from "zod/v4";
 import { McpWorkflowAdapter } from "./adapter.js";
 import { registerChartTools } from "./tools/charts.js";
 import { registerCountryCompareTools } from "./tools/country-compare.js";
+import { registerGameTools } from "./tools/games.js";
 import { registerQueryKeywordTools } from "./tools/query-keywords.js";
 import { registerReviewTools } from "./tools/reviews.js";
 import { registerSearchKeywordTools } from "./tools/search-keywords.js";
@@ -102,6 +103,7 @@ registerQueryKeywordTools(server);
 registerStrategyTools(server);
 registerCountryCompareTools(server);
 registerChartTools(server);
+registerGameTools(server);
 registerReviewTools(server);
 
 server.registerTool(

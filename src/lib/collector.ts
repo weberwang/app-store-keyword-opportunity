@@ -19,6 +19,7 @@ import {
 } from "./scoring.js";
 import { fetchChart } from "./trends.js";
 import { countFrequentTerms, normalizeTerm, tokenizeText, toCsvList } from "./text.js";
+import { defaultGameGenreId, isGameStoreApp } from "./game-utils.js";
 import type {
   AppReview,
   AppStoreApp,
@@ -39,6 +40,11 @@ interface CollectKeywordSnapshotInput {
   resultsLimit?: number;
   detailLimit?: number;
   concurrency?: number;
+}
+
+interface KeywordCollectionRuntimeOptions {
+  upstreamGenreId?: string;
+  appFilter?: (app: AppStoreApp) => boolean;
 }
 
 const keywordReviewPages = 1;
@@ -65,12 +71,25 @@ async function enrichApps(
   return mergeAppDetails(apps, details);
 }
 
-async function collectKeywordTrendApps(country: string, genreId: string) {
+function applyAppFilter<T extends AppStoreApp>(
+  apps: T[],
+  appFilter?: (app: AppStoreApp) => boolean,
+): T[] {
+  return appFilter ? apps.filter(appFilter) : apps;
+}
+
+async function collectKeywordTrendApps(
+  country: string,
+  genreId: string,
+  options: KeywordCollectionRuntimeOptions = {},
+) {
   const chartTypes = ["top-free", "new-apps"] as const;
+  const upstreamGenreId = options.upstreamGenreId ?? genreId;
   const chartSets = await Promise.all(
     chartTypes.map(async (chartType) => {
       try {
-        return await fetchChart(country, chartType, keywordChartLimit, genreId);
+        const apps = await fetchChart(country, chartType, keywordChartLimit, upstreamGenreId);
+        return applyAppFilter(apps, options.appFilter);
       } catch {
         return [];
       }
@@ -235,12 +254,14 @@ function buildKeywordResult(
   return result;
 }
 
-export async function collectKeywordSnapshot(
+async function collectKeywordSnapshotInternal(
   input: CollectKeywordSnapshotInput,
+  runtimeOptions: KeywordCollectionRuntimeOptions = {},
 ): Promise<Snapshot> {
   const country = (input.country || "us").trim().toLowerCase();
   const language = (input.language || "en-us").trim().toLowerCase();
   const genreId = input.genreId || "";
+  const upstreamGenreId = runtimeOptions.upstreamGenreId ?? genreId;
   const suggestionsLimit = Math.max(1, Math.min(input.suggestionsLimit || 10, 20));
   const resultsLimit = Math.max(1, Math.min(input.resultsLimit || 50, 200));
   const detailLimit = Math.max(1, Math.min(input.detailLimit || 5, 20));
@@ -260,11 +281,14 @@ export async function collectKeywordSnapshot(
     expectedSources.push("aso-provider");
   }
 
-  const chartApps = await collectKeywordTrendApps(country, genreId);
+  const chartApps = await collectKeywordTrendApps(country, genreId, runtimeOptions);
   const reviewCache = new Map<string, Promise<AppReview[]>>();
 
   const seedApps = await mapWithConcurrency(seeds, concurrency, async (seed) => {
-    const apps = await searchApps(seed, { country, language, limit: resultsLimit, genreId });
+    const apps = applyAppFilter(
+      await searchApps(seed, { country, language, limit: resultsLimit, genreId: upstreamGenreId }),
+      runtimeOptions.appFilter,
+    );
     return { seed, apps };
   });
 
@@ -284,7 +308,10 @@ export async function collectKeywordSnapshot(
     [...termSeedMap.values()],
     concurrency,
     async ({ term, seeds: supportingSeeds }) => {
-      const apps = await searchApps(term, { country, language, limit: resultsLimit, genreId });
+      const apps = applyAppFilter(
+        await searchApps(term, { country, language, limit: resultsLimit, genreId: upstreamGenreId }),
+        runtimeOptions.appFilter,
+      );
       if (!apps.length) {
         return null;
       }
@@ -335,4 +362,26 @@ export async function collectKeywordSnapshot(
     },
     keywords,
   };
+}
+
+export async function collectKeywordSnapshot(
+  input: CollectKeywordSnapshotInput,
+): Promise<Snapshot> {
+  return collectKeywordSnapshotInternal(input);
+}
+
+export async function collectGameKeywordSnapshot(
+  input: CollectKeywordSnapshotInput,
+): Promise<Snapshot> {
+  const genreId = input.genreId || defaultGameGenreId;
+  return collectKeywordSnapshotInternal(
+    {
+      ...input,
+      genreId,
+    },
+    {
+      upstreamGenreId: genreId === defaultGameGenreId ? "" : genreId,
+      appFilter: (app) => isGameStoreApp(app, genreId),
+    },
+  );
 }

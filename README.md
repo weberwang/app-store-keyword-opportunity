@@ -44,6 +44,9 @@
 | `compare_countries` | 对同一组词并发采集多个国家的搜索结果并比较机会分 |
 | `fetch_chart` | 远程拉取 App Store 榜单 |
 | `analyze_chart` | 分析榜单热词、品类集中度和免费/付费结构 |
+| `search_game_keywords` | 专门采集游戏赛道关键词机会，并输出更贴近玩法/细分品类的关键词分析 |
+| `analyze_game_heat` | 汇总游戏赛道热度，输出热门子类型、上升中的游戏和厂商热度 |
+| `analyze_game_track` | 专门分析游戏赛道的榜单结构、头部厂商集中度、live-ops 节奏、新游晋升和评论痛点 |
 | `analyze_reviews` | 远程抓取竞品评论并提炼痛点词、卖点词和评分分布 |
 
 ### 远程采集说明
@@ -63,6 +66,22 @@
 - `highValueSummary.dimensions`：demandDurability、supplyWeakness、monetizationEvidence、entryFeasibility、evidenceConfidence 五个维度
 - `signalCoverage`：当前有哪些来源参与、哪些来源缺失、平均置信度是多少
 - `brief.buildThesis` / `brief.blockers` / `brief.confidenceGaps`：为什么值得做、什么在阻塞、还缺什么证据
+
+### 游戏赛道分析
+
+如果你要看游戏市场，而不是泛产品关键词，可以直接使用 `analyze_game_track`：
+
+- 默认分析 `6014=Games` 整体赛道
+- 同时拉取 `top-free`、`top-paid`、`new-apps` 三张榜单
+- 输出头部厂商集中度、跨榜单头部产品、更新频率、标题热词和新游晋升信号
+- 可选抓取头部游戏评论，提炼差评痛点和卖点词
+
+这层分析不是替代 `search_keywords`，而是用于更快判断某个游戏赛道是否拥挤、是否依赖强 live-ops、以及新品是否还有晋升窗口。
+
+如果你要专门看游戏关键词和热度，现在还有两类补充工具：
+
+- `search_game_keywords`：按游戏赛道采集关键词，并输出 demand leader、low competition、monetization leader、buildable whitespace 等视角
+- `analyze_game_heat`：从游戏榜单中提取热门子类型、上升中的新游、厂商热度和标题热词
 
 ### 外部 ASO 快照接入
 
