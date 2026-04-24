@@ -3,6 +3,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
 import { McpWorkflowAdapter } from "./adapter.js";
+import { registerChartTools } from "./tools/charts.js";
+import { registerCountryCompareTools } from "./tools/country-compare.js";
+import { registerQueryKeywordTools } from "./tools/query-keywords.js";
+import { registerReviewTools } from "./tools/reviews.js";
+import { registerSearchKeywordTools } from "./tools/search-keywords.js";
+import { registerStrategyTools } from "./tools/strategy.js";
 const trendSignalSchema = z.object({
     label: z.string().min(1),
     targetUser: z.string().min(1),
@@ -83,6 +89,12 @@ const server = new McpServer({
     version: "0.3.0",
 });
 const adapter = new McpWorkflowAdapter();
+registerSearchKeywordTools(server);
+registerQueryKeywordTools(server);
+registerStrategyTools(server);
+registerCountryCompareTools(server);
+registerChartTools(server);
+registerReviewTools(server);
 server.registerTool("discover_app_topics", {
     description: "Discover, score, and brief app topic opportunities across trend, keyword, or replacement discovery paths.",
     inputSchema: workflowSchema,

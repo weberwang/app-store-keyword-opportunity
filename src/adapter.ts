@@ -21,7 +21,7 @@ export interface McpToolResponse {
 function summarizeCandidate(candidate: RankedCandidate): string {
 	return [
 		`${candidate.title} [${candidate.decisionTier}]`,
-		`score=${candidate.attractiveness}, confidence=${candidate.confidence}`,
+		`score=${candidate.attractiveness}, highValue=${candidate.highValueModel?.overallScore ?? "n/a"}, confidence=${candidate.confidence}`,
 		candidate.brief.competitiveFraming,
 	].join(" | ");
 }

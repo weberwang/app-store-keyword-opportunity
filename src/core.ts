@@ -6,13 +6,16 @@ import {
 	type EvidenceDimension,
 	type EvidenceTrace,
 	type KeywordSeedInput,
+	type NormalizedMarketSignal,
 	type OpportunityBrief,
 	type RankedCandidate,
 	type ReplacementAppInput,
+	type SignalCoverageSummary,
 	type TrendSignalInput,
 	type WorkflowRequest,
 	type WorkflowResult,
 } from "./types.js";
+import { buildHighValueOpportunitySummary } from "./lib/scoring.js";
 
 interface DraftCandidate {
 	id: string;
@@ -30,6 +33,8 @@ interface DraftCandidate {
 	corroboration: number;
 	validationIdeas: string[];
 	riskNotes: string[];
+	marketSignals?: NormalizedMarketSignal[];
+	signalCoverage?: SignalCoverageSummary;
 }
 
 const dimensionWeights: Record<EvidenceDimension, number> = {
@@ -103,10 +108,16 @@ function buildDimensions(draft: DraftCandidate): { dimensions: DimensionMap; mis
 	return { dimensions, missingDimensions };
 }
 
-function computeConfidence(dimensions: DimensionMap, corroboration: number): number {
+function computeConfidence(dimensions: DimensionMap, corroboration: number, signalCoverage?: SignalCoverageSummary): number {
 	const populated = evidenceDimensions.filter((dimension) => !dimensions[dimension].missing).length;
 	const coverage = (populated / evidenceDimensions.length) * 100;
-	return clampScore(coverage * 0.65 + clampScore(corroboration) * 0.35);
+	const sourcePenalty = (signalCoverage?.missingSources.length ?? 0) * 6;
+	return clampScore(
+		coverage * 0.5 +
+		clampScore(corroboration) * 0.25 +
+		(signalCoverage?.averageConfidence ?? 55) * 0.25 -
+		sourcePenalty,
+	);
 }
 
 function computeAttractiveness(dimensions: DimensionMap): number {
@@ -121,14 +132,24 @@ function computeAttractiveness(dimensions: DimensionMap): number {
 	return clampScore(weighted);
 }
 
-function assignDecisionTier(attractiveness: number, confidence: number, risk: number): DecisionTier {
-	if (attractiveness >= 75 && confidence >= 70 && risk <= 60) {
+function assignDecisionTier(candidate: Pick<RankedCandidate, "attractiveness" | "confidence" | "highValueModel" | "evidence">): DecisionTier {
+	const risk = candidate.evidence.risk.score;
+	const highValueScore = candidate.highValueModel?.overallScore ?? candidate.attractiveness;
+	const evidenceConfidence = candidate.highValueModel?.dimensions.evidenceConfidence.score ?? candidate.confidence;
+	const demandDurability = candidate.highValueModel?.dimensions.demandDurability.score ?? candidate.evidence.demand.score;
+	const monetizationEvidence = candidate.highValueModel?.dimensions.monetizationEvidence.score ?? candidate.evidence.monetizationPotential.score;
+	const entryFeasibility = candidate.highValueModel?.dimensions.entryFeasibility.score ?? candidate.evidence.implementationFeasibility.score;
+
+	if ((demandDurability < 45 && monetizationEvidence < 45) || (risk > 75 && entryFeasibility < 45)) {
+		return "discard";
+	}
+	if (highValueScore >= 78 && evidenceConfidence >= 65 && risk <= 58) {
 		return "pursue-now";
 	}
-	if (attractiveness >= 60 && confidence >= 50) {
+	if (highValueScore >= 60 && candidate.confidence >= 50) {
 		return "validate-next";
 	}
-	if (attractiveness >= 45) {
+	if (highValueScore >= 45 || candidate.attractiveness >= 45) {
 		return "monitor";
 	}
 	return "discard";
@@ -193,8 +214,8 @@ function buildCompetitiveFraming(candidate: Omit<RankedCandidate, "brief">): str
 
 function buildBrief(candidate: Omit<RankedCandidate, "brief">, draft: DraftCandidate): OpportunityBrief {
 	const evidenceTrace = buildEvidenceTrace(candidate);
-	const rejectionReasons: string[] = [];
-	if (candidate.decisionTier === "discard") {
+	const rejectionReasons = [...(candidate.highValueModel?.blockers || [])];
+	if (!rejectionReasons.length && candidate.decisionTier === "discard") {
 		if (candidate.evidence.marketGap.score < 45) {
 			rejectionReasons.push("Whitespace is too limited to justify a new entry.");
 		}
@@ -205,20 +226,28 @@ function buildBrief(candidate: Omit<RankedCandidate, "brief">, draft: DraftCandi
 			rejectionReasons.push("Monetization fit looks too weak for a first pass build.");
 		}
 	}
+	const confidenceGaps = [
+		...(candidate.signalCoverage?.missingSources.map((source) => `Missing signal source: ${source}`) || []),
+		...candidate.missingDimensions.map((dimension) => `Missing evidence dimension: ${dimension}`),
+	];
 
 	return {
 		headline: `${candidate.title} is a ${candidate.decisionTier} opportunity with ${candidate.confidence}% confidence.`,
 		targetUser: candidate.targetUser,
 		coreProblem: candidate.coreProblem,
 		appConcept: candidate.appConcept,
+		buildThesis: candidate.highValueModel?.buildRecommendation,
 		supportingEvidenceSummary: [
 			candidate.evidence.demand.summary,
 			candidate.evidence.marketGap.summary,
 			candidate.evidence.monetizationPotential.summary,
 		],
+		strongestSupportingEvidence: candidate.highValueModel?.strongestSignals,
 		competitiveFraming: buildCompetitiveFraming(candidate),
 		monetizationHypothesis: buildMonetizationHypothesis(candidate),
 		primaryRisks: draft.riskNotes.length ? draft.riskNotes : [candidate.evidence.risk.summary],
+		blockers: candidate.highValueModel?.blockers || [],
+		confidenceGaps,
 		nextValidationSteps: draft.validationIdeas,
 		evidenceTrace,
 		rejectionReasons,
@@ -227,9 +256,26 @@ function buildBrief(candidate: Omit<RankedCandidate, "brief">, draft: DraftCandi
 
 function rankCandidate(draft: DraftCandidate): RankedCandidate {
 	const { dimensions, missingDimensions } = buildDimensions(draft);
-	const confidence = computeConfidence(dimensions, draft.corroboration);
-	const attractiveness = computeAttractiveness(dimensions);
-	const decisionTier = assignDecisionTier(attractiveness, confidence, dimensions.risk.score);
+	const highValueModel = buildHighValueOpportunitySummary({
+		title: draft.title,
+		demand: dimensions.demand.score,
+		competition: dimensions.competition.score,
+		marketGap: dimensions.marketGap.score,
+		monetizationPotential: dimensions.monetizationPotential.score,
+		implementationFeasibility: dimensions.implementationFeasibility.score,
+		risk: dimensions.risk.score,
+		trendMomentum: dimensions.trendMomentum.score,
+		supplyFreshness: dimensions.supplyFreshness.missing ? null : dimensions.supplyFreshness.score,
+		replacementPressure: dimensions.replacementPressure.missing ? null : dimensions.replacementPressure.score,
+		painIntensity: dimensions.painIntensity.score,
+		signalCoverage: draft.signalCoverage,
+		signals: draft.marketSignals,
+	});
+	const confidence = clampScore(
+		computeConfidence(dimensions, draft.corroboration, draft.signalCoverage) * 0.65 +
+			highValueModel.dimensions.evidenceConfidence.score * 0.35,
+	);
+	const attractiveness = clampScore(computeAttractiveness(dimensions) * 0.55 + highValueModel.overallScore * 0.45);
 	const candidateWithoutBrief = {
 		id: draft.id,
 		mode: draft.mode,
@@ -241,11 +287,15 @@ function rankCandidate(draft: DraftCandidate): RankedCandidate {
 		seed: draft.seed,
 		region: draft.region,
 		evidence: dimensions,
+		highValueModel,
+		marketSignals: draft.marketSignals,
+		signalCoverage: draft.signalCoverage,
 		missingDimensions,
 		attractiveness,
 		confidence,
-		decisionTier,
+		decisionTier: "monitor" as DecisionTier,
 	} satisfies Omit<RankedCandidate, "brief">;
+	candidateWithoutBrief.decisionTier = assignDecisionTier(candidateWithoutBrief);
 
 	return {
 		...candidateWithoutBrief,
@@ -618,6 +668,9 @@ export function runWorkflow(request: WorkflowRequest): WorkflowResult {
 			if (right.decisionTier !== left.decisionTier) {
 				const order: DecisionTier[] = ["pursue-now", "validate-next", "monitor", "discard"];
 				return order.indexOf(left.decisionTier) - order.indexOf(right.decisionTier);
+			}
+			if ((right.highValueModel?.overallScore || 0) !== (left.highValueModel?.overallScore || 0)) {
+				return (right.highValueModel?.overallScore || 0) - (left.highValueModel?.overallScore || 0);
 			}
 			if (right.attractiveness !== left.attractiveness) {
 				return right.attractiveness - left.attractiveness;

@@ -3,6 +3,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
 import { McpWorkflowAdapter } from "./adapter.js";
+import { registerChartTools } from "./tools/charts.js";
+import { registerCountryCompareTools } from "./tools/country-compare.js";
+import { registerQueryKeywordTools } from "./tools/query-keywords.js";
+import { registerReviewTools } from "./tools/reviews.js";
+import { registerSearchKeywordTools } from "./tools/search-keywords.js";
+import { registerStrategyTools } from "./tools/strategy.js";
 import type { WorkflowRequest } from "./types.js";
 
 const trendSignalSchema = z.object({
@@ -90,6 +96,13 @@ const server = new McpServer({
 });
 
 const adapter = new McpWorkflowAdapter();
+
+registerSearchKeywordTools(server);
+registerQueryKeywordTools(server);
+registerStrategyTools(server);
+registerCountryCompareTools(server);
+registerChartTools(server);
+registerReviewTools(server);
 
 server.registerTool(
 	"discover_app_topics",

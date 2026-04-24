@@ -1,6 +1,6 @@
 {
   "name": "app-store-keyword-opportunity",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Three-path AI workflow for discovering high-value App topics via trend, keyword, and replacement discovery.",
   "type": "module",
   "author": "weberwang <for.js221@gmail.com>",
@@ -21,8 +21,8 @@
   "app-store-keyword-opportunity-cli": "./build/cli.js"
   },
   "files": [
-  "build/*.js",
-  "build/*.d.ts",
+  "build/**/*.js",
+  "build/**/*.d.ts",
     "README.md"
   ],
   "main": "./build/api.js",

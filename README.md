@@ -1,12 +1,29 @@
 # app-store-keyword-opportunity
 
-一个从零重建的 App 选题发现工作流，核心目标不是复用旧的关键词工具，而是把三条发现路径统一到同一个评分和输出模型里：
+一个面向 App Store 远程采集与机会判断的 MCP/CLI 工具集，核心目标是把在线抓取、横向比较、评论分析和三条发现路径统一到同一个仓库里：
 
 - 趋势发现：找正在形成的新机会
 - 关键词发现：找显性需求里的细分缺口
 - 替代发现：找“产品老了但用户还在”的存量替代机会
 
-当前实现提供一个 MCP tool 和一个 CLI 入口，用同一套引擎输出候选机会、分项证据、优先级分层和标准化 brief。
+当前实现同时支持两层能力：
+
+- 远程采集：直接从 Apple 公开端点拉取搜索结果、榜单和评论
+- 评分工作流：对趋势、关键词、替代三条路径输出候选机会、证据分项和标准化 brief
+
+当前的选题判断已经升级为面向自研产品决策的高价值模型，核心会显式衡量：
+
+- 需求持续性：这是不是一个能持续存在的需求，而不只是短期热度
+- 供给弱点：现有供给是不是老、弱、窄，存在可切入缺口
+- 商业化证据：市场里是否已经有付费、订阅或高价值用户信号
+- 切入可行性：以当前团队能力和竞争格局，是否存在 buildable whitespace
+- 证据可信度：当前判断是否主要建立在公开真值，还是缺少第三方/社区信号
+
+远程采集使用的公开数据源包括：
+
+- iTunes Search API：关键词搜索和 App 详情 lookup
+- Apple Marketing Tools RSS：Top Free、Top Paid、New Apps 榜单
+- iTunes Customer Reviews RSS：竞品评论抓取
 
 仓库已经整理成适合 npm 发布的形态：
 
@@ -14,13 +31,78 @@
 - 模块入口通过包根导出 `runWorkflow`、adapter 和类型定义
 - npm 发布内容只包含运行时构建产物与 README，不包含测试文件和 sourcemap
 
-## MCP Tool
+## MCP Tools
 
-服务启动后会暴露一个工具：
+服务启动后会暴露两类工具：
 
 | Tool | Description |
 | --- | --- |
 | `discover_app_topics` | 按 `trend`、`keyword` 或 `replacement` 三种模式执行发现、评分和 brief 生成 |
+| `search_keywords` | 远程拉取 App Store 搜索结果并生成关键词机会快照 |
+| `query_keywords` | 从关键词快照中做模糊查询和多维过滤，支持按高价值分、来源置信度和估算值过滤 |
+| `build_strategy` | 基于关键词快照生成定位、变现和路线图建议，优先使用高价值自研选题模型 |
+| `compare_countries` | 对同一组词并发采集多个国家的搜索结果并比较机会分 |
+| `fetch_chart` | 远程拉取 App Store 榜单 |
+| `analyze_chart` | 分析榜单热词、品类集中度和免费/付费结构 |
+| `analyze_reviews` | 远程抓取竞品评论并提炼痛点词、卖点词和评分分布 |
+
+### 远程采集说明
+
+- `search_keywords` 会在线请求 Apple 端点，再把结果保存成本地快照，方便后续 `query_keywords` 和 `build_strategy` 复用
+- `fetch_chart`、`analyze_chart`、`analyze_reviews` 是直接联网分析，不依赖本地快照
+- 关键词扩展是“远程结果驱动”的轻量扩展，不依赖预置本地词库
+- 快照会保留 `marketSignals`、`signalCoverage` 和 `highValueSummary`，用来解释分数来自哪些来源、缺了哪些来源，以及为什么这个方向值得做或暂时不该做
+- 如果提供 `aso_snapshot_file` 参数或 `ASO_SNAPSHOT_FILE` 环境变量，关键词快照还会合并外部 ASO provider 的归一化信号
+- 如果不想先落盘文件，也可以直接通过 `aso_snapshot` 参数把同样的快照对象传进 `search_keywords`
+
+### 高价值模型输出
+
+关键词快照和 workflow 候选结果除了保留原有 `opportunityScore` 外，还会返回：
+
+- `highValueSummary.overallScore`：更贴近自研 build/no-build 决策的综合分
+- `highValueSummary.dimensions`：demandDurability、supplyWeakness、monetizationEvidence、entryFeasibility、evidenceConfidence 五个维度
+- `signalCoverage`：当前有哪些来源参与、哪些来源缺失、平均置信度是多少
+- `brief.buildThesis` / `brief.blockers` / `brief.confidenceGaps`：为什么值得做、什么在阻塞、还缺什么证据
+
+### 外部 ASO 快照接入
+
+如果你已经从外部 ASO provider 导出了归一化 market signals，可以在运行 `search_keywords` 时通过 `aso_snapshot_file` 指向该 JSON 文件，或者设置环境变量 `ASO_SNAPSHOT_FILE`。如果你不想单独整理文件，也可以直接把同样结构的对象放进 `aso_snapshot` 参数。
+
+快照文件最小格式如下：
+
+```json
+{
+	"providerId": "mock-aso",
+	"generatedAt": "2026-04-24T03:00:00.000Z",
+	"signals": [
+		{
+			"entityKind": "keyword",
+			"entityId": "habit tracker",
+			"metric": "keyword-volume",
+			"value": 82,
+			"territory": "us",
+			"confidence": 76,
+			"isEstimated": true,
+			"rawMetricKey": "search_volume",
+			"rawValue": 14200
+		},
+		{
+			"entityKind": "app",
+			"entityId": "1438388363",
+			"entityLabel": "Habit Tracker",
+			"metric": "download-estimate",
+			"value": 64,
+			"territory": "us",
+			"confidence": 70,
+			"isEstimated": true,
+			"rawMetricKey": "downloads_estimate",
+			"rawValue": 32000
+		}
+	]
+}
+```
+
+当前支持导入 `keyword` 和 `app` 两类实体信号，并将它们统一归入 `aso-provider` 来源。
 
 ### 输入模式
 
@@ -71,6 +153,12 @@ CLI 运行样例：
 npm run sample:trend
 npm run sample:keyword
 npm run sample:replacement
+```
+
+Inspector 调试 MCP 远程采集工具：
+
+```bash
+npm run inspector
 ```
 
 ## Programmatic Usage
@@ -136,7 +224,7 @@ npm pack --dry-run
 - 关键词路径会优先更窄的 segment，而不是机械保留 broad seed
 - 替代路径会过滤掉真正无人使用的 dead app，并显式输出 `supplyFreshness` 与 `replacementPressure`
 - Skill 与 MCP adapter 共享同一个 workflow contract
-- `npm pack --dry-run` 应只包含运行时构建文件和 README
+- `npm pack --dry-run` 应包含运行时构建文件、嵌套的 lib/tools 产物和 README
 
 ## Project Structure
 
@@ -149,6 +237,8 @@ src/
 	adapter.ts
 	samples.ts
 	types.ts
+	lib/
+	tools/
 	tests/
 		workflow.test.ts
 openspec/
@@ -158,7 +248,7 @@ openspec/
 
 ## Notes
 
-- 当前实现是规则驱动和样例驱动的工作流骨架，不依赖旧项目里的关键词采集实现
+- 当前实现已经支持远程采集，但依然使用轻量规则评分，不是官方商业情报数据源
 - 分数代表结构化判断，不代表真实市场规模预测
 - `supplyFreshness` 是供给证据，不是机会正向维度；最终排序会将其反向解释为 stale-supply opportunity
 - 缺失证据不会阻止出结果，但会降低 `confidence` 并显式标记缺口
