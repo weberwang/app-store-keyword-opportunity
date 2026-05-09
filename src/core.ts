@@ -13,6 +13,26 @@ import {
 	type WorkflowRequest,
 	type WorkflowResult,
 } from "./types.js";
+import {
+	confidenceWeights,
+	decisionTierThresholds,
+	DEFAULT_TOP_N,
+	dimensionWeights,
+	invertedDimensions,
+	keywordDefaults,
+	keywordSegmentAdjustments,
+	keywordSegmentBonuses,
+	MISSING_DIMENSION_FALLBACK_SCORE,
+	monetizationThresholds,
+	rejectionThresholds,
+	replacementDefaults,
+	replacementFilterThresholds,
+	scoreBandThresholds,
+	SLUG_MAX_LENGTH,
+	tierSortOrder,
+	trendDefaults,
+	trendShapeThresholds,
+} from "./config.js";
 
 interface DraftCandidate {
 	id: string;
@@ -32,21 +52,7 @@ interface DraftCandidate {
 	riskNotes: string[];
 }
 
-const dimensionWeights: Record<EvidenceDimension, number> = {
-	demand: 0.15,
-	competition: 0.12,
-	marketGap: 0.12,
-	painIntensity: 0.1,
-	monetizationPotential: 0.1,
-	trendMomentum: 0.08,
-	regionalFit: 0.07,
-	supplyFreshness: 0.08,
-	replacementPressure: 0.08,
-	implementationFeasibility: 0.05,
-	risk: 0.05,
-};
-
-function clampScore(value: number | null | undefined, fallback = 50): number {
+function clampScore(value: number | null | undefined, fallback = MISSING_DIMENSION_FALLBACK_SCORE): number {
 	if (value === null || value === undefined || Number.isNaN(value)) {
 		return fallback;
 	}
@@ -66,7 +72,7 @@ function slugify(value: string): string {
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, "-")
 		.replace(/^-+|-+$/g, "")
-		.slice(0, 60);
+		.slice(0, SLUG_MAX_LENGTH);
 }
 
 function createDimension(
@@ -106,14 +112,14 @@ function buildDimensions(draft: DraftCandidate): { dimensions: DimensionMap; mis
 function computeConfidence(dimensions: DimensionMap, corroboration: number): number {
 	const populated = evidenceDimensions.filter((dimension) => !dimensions[dimension].missing).length;
 	const coverage = (populated / evidenceDimensions.length) * 100;
-	return clampScore(coverage * 0.65 + clampScore(corroboration) * 0.35);
+	return clampScore(coverage * confidenceWeights.coverage + clampScore(corroboration) * confidenceWeights.corroboration);
 }
 
 function computeAttractiveness(dimensions: DimensionMap): number {
 	let weighted = 0;
 	for (const dimension of evidenceDimensions) {
 		let score = dimensions[dimension].score;
-		if (dimension === "competition" || dimension === "risk" || dimension === "supplyFreshness") {
+		if (invertedDimensions.has(dimension)) {
 			score = 100 - score;
 		}
 		weighted += score * dimensionWeights[dimension];
@@ -122,13 +128,14 @@ function computeAttractiveness(dimensions: DimensionMap): number {
 }
 
 function assignDecisionTier(attractiveness: number, confidence: number, risk: number): DecisionTier {
-	if (attractiveness >= 75 && confidence >= 70 && risk <= 60) {
+	const { pursueNow, validateNext, monitor } = decisionTierThresholds;
+	if (attractiveness >= pursueNow.minAttractiveness && confidence >= pursueNow.minConfidence && risk <= pursueNow.maxRisk) {
 		return "pursue-now";
 	}
-	if (attractiveness >= 60 && confidence >= 50) {
+	if (attractiveness >= validateNext.minAttractiveness && confidence >= validateNext.minConfidence) {
 		return "validate-next";
 	}
-	if (attractiveness >= 45) {
+	if (attractiveness >= monitor.minAttractiveness) {
 		return "monitor";
 	}
 	return "discard";
@@ -136,18 +143,18 @@ function assignDecisionTier(attractiveness: number, confidence: number, risk: nu
 
 function describeBand(score: number, positiveHigh = true): string {
 	if (positiveHigh) {
-		if (score >= 75) {
+		if (score >= scoreBandThresholds.positiveHigh) {
 			return "strong";
 		}
-		if (score >= 55) {
+		if (score >= scoreBandThresholds.positiveModerate) {
 			return "moderate";
 		}
 		return "weak";
 	}
-	if (score <= 25) {
+	if (score <= scoreBandThresholds.negativeLow) {
 		return "low";
 	}
-	if (score <= 45) {
+	if (score <= scoreBandThresholds.negativeContained) {
 		return "contained";
 	}
 	return "elevated";
@@ -172,10 +179,10 @@ function buildEvidenceTrace(candidate: Omit<RankedCandidate, "brief">): Evidence
 
 function buildMonetizationHypothesis(candidate: Omit<RankedCandidate, "brief">): string {
 	const monetization = candidate.evidence.monetizationPotential.score;
-	if (monetization >= 75) {
+	if (monetization >= monetizationThresholds.strong) {
 		return "Users likely tolerate a subscription or premium workflow bundle if the product wins on clarity and execution speed.";
 	}
-	if (monetization >= 55) {
+	if (monetization >= monetizationThresholds.moderate) {
 		return "A freemium offer with paid power features is plausible, but pricing should be validated against competitor expectations.";
 	}
 	return "Monetization looks fragile; validate willingness to pay before committing to a full product build.";
@@ -195,13 +202,13 @@ function buildBrief(candidate: Omit<RankedCandidate, "brief">, draft: DraftCandi
 	const evidenceTrace = buildEvidenceTrace(candidate);
 	const rejectionReasons: string[] = [];
 	if (candidate.decisionTier === "discard") {
-		if (candidate.evidence.marketGap.score < 45) {
+		if (candidate.evidence.marketGap.score < rejectionThresholds.maxMarketGap) {
 			rejectionReasons.push("Whitespace is too limited to justify a new entry.");
 		}
-		if (candidate.evidence.risk.score > 65) {
+		if (candidate.evidence.risk.score > rejectionThresholds.maxRisk) {
 			rejectionReasons.push("Risk dominates the upside at the current evidence quality.");
 		}
-		if (candidate.evidence.monetizationPotential.score < 45) {
+		if (candidate.evidence.monetizationPotential.score < rejectionThresholds.maxMonetization) {
 			rejectionReasons.push("Monetization fit looks too weak for a first pass build.");
 		}
 	}
@@ -257,13 +264,13 @@ function trendShape(signal: TrendSignalInput): string {
 	if (signal.opportunityShape) {
 		return signal.opportunityShape;
 	}
-	if ((signal.monetizationShift ?? 0) >= 70) {
+	if ((signal.monetizationShift ?? 0) >= trendShapeThresholds.monetizationInflection) {
 		return "monetization-inflection";
 	}
-	if ((signal.distributionChange ?? 0) >= 65) {
+	if ((signal.distributionChange ?? 0) >= trendShapeThresholds.distributionShift) {
 		return "distribution-shift";
 	}
-	if ((signal.categoryAcceleration ?? 0) >= 60) {
+	if ((signal.categoryAcceleration ?? 0) >= trendShapeThresholds.emergingBehavior) {
 		return "emerging-behavior";
 	}
 	return "underserved-workflow";
@@ -289,9 +296,12 @@ export function discoverTrendCandidates(signals: TrendSignalInput[] = []): Draft
 		const marketGap = signal.marketGap ?? average([competition === null ? null : 100 - competition, painIntensity, 100 - (signal.distributionChange ?? 50)]);
 		const monetizationPotential = signal.monetizationPotential ?? average([signal.monetizationShift, demand]);
 		const risk = signal.risk ?? average([signal.timeSensitivity, durabilityRisk]);
-		const regionalFit = signal.regionalFit ?? 70;
-		const feasibility = signal.implementationFeasibility ?? 65;
-		const corroboration = clampScore((signal.corroboratingSignals?.length ?? 0) * 20 + (signal.durability ?? 50) * 0.4);
+		const regionalFit = signal.regionalFit ?? trendDefaults.regionalFit;
+		const feasibility = signal.implementationFeasibility ?? trendDefaults.implementationFeasibility;
+		const corroboration = clampScore(
+			(signal.corroboratingSignals?.length ?? 0) * trendDefaults.corroboratingSignalWeight
+			+ (signal.durability ?? trendDefaults.durabilityFallback) * trendDefaults.durabilityCorroborationWeight,
+		);
 
 		return {
 			id: `trend-${index + 1}-${slugify(signal.label)}`,
@@ -409,16 +419,7 @@ export function expandKeywordClusters(input: KeywordSeedInput): KeywordCluster[]
 }
 
 function keywordSegmentBonus(cluster: KeywordCluster): number {
-	if (cluster.segmentType === "persona") {
-		return 14;
-	}
-	if (cluster.segmentType === "workflow") {
-		return 12;
-	}
-	if (cluster.segmentType === "intent") {
-		return 8;
-	}
-	return 0;
+	return keywordSegmentBonuses[cluster.segmentType];
 }
 
 export function discoverKeywordCandidates(input: KeywordSeedInput | undefined): DraftCandidate[] {
@@ -426,23 +427,38 @@ export function discoverKeywordCandidates(input: KeywordSeedInput | undefined): 
 		return [];
 	}
 	const clusters = expandKeywordClusters(input);
-	const baseDemand = input.baseDemand ?? 60;
-	const baseCompetition = input.baseCompetition ?? 65;
-	const basePain = input.basePainIntensity ?? 60;
-	const baseMonetization = input.baseMonetizationPotential ?? 55;
-	const baseRegionalFit = input.baseRegionalFit ?? 65;
+	const baseDemand = input.baseDemand ?? keywordDefaults.baseDemand;
+	const baseCompetition = input.baseCompetition ?? keywordDefaults.baseCompetition;
+	const basePain = input.basePainIntensity ?? keywordDefaults.basePainIntensity;
+	const baseMonetization = input.baseMonetizationPotential ?? keywordDefaults.baseMonetizationPotential;
+	const baseRegionalFit = input.baseRegionalFit ?? keywordDefaults.baseRegionalFit;
 
 	return clusters.map((cluster, index) => {
 		const segmentBonus = keywordSegmentBonus(cluster);
-		const demand = clampScore(baseDemand - cluster.narrowness * 10 + (cluster.segmentType === "intent" ? 4 : 0));
+		const demand = clampScore(
+			baseDemand
+			- cluster.narrowness * keywordSegmentAdjustments.demandNarrownessPenalty
+			+ (cluster.segmentType === "intent" ? keywordSegmentAdjustments.intentDemandBonus : 0),
+		);
 		const competition = clampScore(baseCompetition - segmentBonus);
-		const marketGap = clampScore(average([100 - competition, basePain, 45 + segmentBonus]));
-		const painIntensity = clampScore(basePain + (cluster.segmentType === "workflow" ? 6 : 0));
-		const monetizationPotential = clampScore(baseMonetization + (cluster.segmentType === "persona" ? 8 : 0));
-		const trendMomentum = clampScore(average([demand, 40 + segmentBonus]));
-		const feasibility = cluster.segmentType === "workflow" ? 58 : 68;
-		const risk = clampScore(average([competition, 100 - marketGap, cluster.segmentType === "broad" ? 65 : 45]));
-		const corroboration = clampScore(45 + segmentBonus * 2);
+		const marketGap = clampScore(average([100 - competition, basePain, keywordSegmentAdjustments.marketGapBase + segmentBonus]));
+		const painIntensity = clampScore(basePain + (cluster.segmentType === "workflow" ? keywordSegmentAdjustments.workflowPainBonus : 0));
+		const monetizationPotential = clampScore(baseMonetization + (cluster.segmentType === "persona" ? keywordSegmentAdjustments.personaMonetizationBonus : 0));
+		const trendMomentum = clampScore(average([demand, keywordSegmentAdjustments.trendMomentumBase + segmentBonus]));
+		const feasibility = cluster.segmentType === "workflow"
+			? keywordSegmentAdjustments.workflowFeasibility
+			: keywordSegmentAdjustments.defaultFeasibility;
+		const risk = clampScore(average([
+			competition,
+			100 - marketGap,
+			cluster.segmentType === "broad"
+				? keywordSegmentAdjustments.broadRiskBase
+				: keywordSegmentAdjustments.narrowRiskBase,
+		]));
+		const corroboration = clampScore(
+			keywordSegmentAdjustments.corroborationBase
+			+ segmentBonus * keywordSegmentAdjustments.corroborationBonusMultiplier,
+		);
 
 		return {
 			id: `keyword-${index + 1}-${slugify(cluster.label)}`,
@@ -507,7 +523,10 @@ function isReplacementCandidate(app: ReplacementAppInput): boolean {
 	const stagnation = app.updateStagnationMonths ?? 0;
 	const reviewActivity = app.reviewActivity ?? 0;
 	const demandVisibility = app.ongoingDemandVisibility ?? 0;
-	return stagnation >= 6 && (reviewActivity >= 25 || demandVisibility >= 35);
+	return (
+		stagnation >= replacementFilterThresholds.minStagnationMonths
+		&& (reviewActivity >= replacementFilterThresholds.minReviewActivity || demandVisibility >= replacementFilterThresholds.minDemandVisibility)
+	);
 }
 
 export function discoverReplacementCandidates(apps: ReplacementAppInput[] = []): DraftCandidate[] {
@@ -524,10 +543,10 @@ export function discoverReplacementCandidates(apps: ReplacementAppInput[] = []):
 			replacementPressure,
 			app.unresolvedComplaintIntensity,
 		]);
-		const competition = app.competition ?? 45;
-		const monetizationPotential = app.monetizationPotential ?? 60;
-		const regionalFit = app.regionalFit ?? 65;
-		const feasibility = app.implementationFeasibility ?? 62;
+		const competition = app.competition ?? replacementDefaults.competition;
+		const monetizationPotential = app.monetizationPotential ?? replacementDefaults.monetizationPotential;
+		const regionalFit = app.regionalFit ?? replacementDefaults.regionalFit;
+		const feasibility = app.implementationFeasibility ?? replacementDefaults.implementationFeasibility;
 		const risk = app.risk ?? average([
 			app.lockInStrength,
 			competition,
@@ -538,7 +557,7 @@ export function discoverReplacementCandidates(apps: ReplacementAppInput[] = []):
 				app.reviewActivity,
 				app.ongoingDemandVisibility,
 				app.modernAlternativeRequests,
-			]) ?? 50,
+			]) ?? MISSING_DIMENSION_FALLBACK_SCORE,
 		);
 
 		return {
@@ -616,15 +635,14 @@ export function runWorkflow(request: WorkflowRequest): WorkflowResult {
 		.map(rankCandidate)
 		.sort((left, right) => {
 			if (right.decisionTier !== left.decisionTier) {
-				const order: DecisionTier[] = ["pursue-now", "validate-next", "monitor", "discard"];
-				return order.indexOf(left.decisionTier) - order.indexOf(right.decisionTier);
+				return tierSortOrder.indexOf(left.decisionTier) - tierSortOrder.indexOf(right.decisionTier);
 			}
 			if (right.attractiveness !== left.attractiveness) {
 				return right.attractiveness - left.attractiveness;
 			}
 			return right.confidence - left.confidence;
 		})
-		.slice(0, request.topN ?? 5);
+		.slice(0, request.topN ?? DEFAULT_TOP_N);
 
 	return {
 		mode: request.mode,
