@@ -6,9 +6,11 @@ import {
 	type EvidenceDimension,
 	type EvidenceTrace,
 	type KeywordSeedInput,
+	type NormalizedMarketSignal,
 	type OpportunityBrief,
 	type RankedCandidate,
 	type ReplacementAppInput,
+	type SignalCoverageSummary,
 	type TrendSignalInput,
 	type WorkflowRequest,
 	type WorkflowResult,
@@ -33,6 +35,7 @@ import {
 	trendDefaults,
 	trendShapeThresholds,
 } from "./config.js";
+import { buildHighValueOpportunitySummary } from "./lib/scoring.js";
 
 interface DraftCandidate {
 	id: string;
@@ -50,6 +53,8 @@ interface DraftCandidate {
 	corroboration: number;
 	validationIdeas: string[];
 	riskNotes: string[];
+	marketSignals?: NormalizedMarketSignal[];
+	signalCoverage?: SignalCoverageSummary;
 }
 
 function clampScore(value: number | null | undefined, fallback = MISSING_DIMENSION_FALLBACK_SCORE): number {
@@ -109,10 +114,19 @@ function buildDimensions(draft: DraftCandidate): { dimensions: DimensionMap; mis
 	return { dimensions, missingDimensions };
 }
 
-function computeConfidence(dimensions: DimensionMap, corroboration: number): number {
+function computeConfidence(dimensions: DimensionMap, corroboration: number, signalCoverage?: SignalCoverageSummary): number {
 	const populated = evidenceDimensions.filter((dimension) => !dimensions[dimension].missing).length;
 	const coverage = (populated / evidenceDimensions.length) * 100;
-	return clampScore(coverage * confidenceWeights.coverage + clampScore(corroboration) * confidenceWeights.corroboration);
+	const weightedCoverage = coverage * confidenceWeights.coverage + clampScore(corroboration) * confidenceWeights.corroboration;
+	if (!signalCoverage) {
+		return clampScore(weightedCoverage);
+	}
+	const sourcePenalty = (signalCoverage?.missingSources.length ?? 0) * 6;
+	return clampScore(
+		weightedCoverage * 0.75 +
+		clampScore(signalCoverage.averageConfidence, MISSING_DIMENSION_FALLBACK_SCORE) * 0.25 -
+		sourcePenalty,
+	);
 }
 
 function computeAttractiveness(dimensions: DimensionMap): number {
@@ -127,15 +141,32 @@ function computeAttractiveness(dimensions: DimensionMap): number {
 	return clampScore(weighted);
 }
 
-function assignDecisionTier(attractiveness: number, confidence: number, risk: number): DecisionTier {
+function assignDecisionTier(candidate: Pick<RankedCandidate, "attractiveness" | "confidence" | "highValueModel" | "evidence">): DecisionTier {
+	const risk = candidate.evidence.risk.score;
+	const highValueScore = candidate.highValueModel?.overallScore ?? candidate.attractiveness;
+	const evidenceConfidence = candidate.highValueModel?.dimensions.evidenceConfidence.score ?? candidate.confidence;
+	const demandDurability = candidate.highValueModel?.dimensions.demandDurability.score ?? candidate.evidence.demand.score;
+	const monetizationEvidence = candidate.highValueModel?.dimensions.monetizationEvidence.score ?? candidate.evidence.monetizationPotential.score;
+	const entryFeasibility = candidate.highValueModel?.dimensions.entryFeasibility.score ?? candidate.evidence.implementationFeasibility.score;
 	const { pursueNow, validateNext, monitor } = decisionTierThresholds;
-	if (attractiveness >= pursueNow.minAttractiveness && confidence >= pursueNow.minConfidence && risk <= pursueNow.maxRisk) {
+
+	if ((demandDurability < 45 && monetizationEvidence < 45) || (risk > 75 && entryFeasibility < 45)) {
+		return "discard";
+	}
+	if (
+		highValueScore >= Math.max(78, pursueNow.minAttractiveness) &&
+		evidenceConfidence >= Math.max(65, pursueNow.minConfidence) &&
+		risk <= Math.min(58, pursueNow.maxRisk)
+	) {
 		return "pursue-now";
 	}
-	if (attractiveness >= validateNext.minAttractiveness && confidence >= validateNext.minConfidence) {
+	if (
+		(highValueScore >= 60 && candidate.confidence >= validateNext.minConfidence) ||
+		(candidate.attractiveness >= validateNext.minAttractiveness && candidate.confidence >= validateNext.minConfidence)
+	) {
 		return "validate-next";
 	}
-	if (attractiveness >= monitor.minAttractiveness) {
+	if (highValueScore >= monitor.minAttractiveness || candidate.attractiveness >= monitor.minAttractiveness) {
 		return "monitor";
 	}
 	return "discard";
@@ -200,32 +231,49 @@ function buildCompetitiveFraming(candidate: Omit<RankedCandidate, "brief">): str
 
 function buildBrief(candidate: Omit<RankedCandidate, "brief">, draft: DraftCandidate): OpportunityBrief {
 	const evidenceTrace = buildEvidenceTrace(candidate);
-	const rejectionReasons: string[] = [];
+	const rejectionReasons = [...(candidate.highValueModel?.blockers || [])];
 	if (candidate.decisionTier === "discard") {
-		if (candidate.evidence.marketGap.score < rejectionThresholds.maxMarketGap) {
+		if (
+			candidate.evidence.marketGap.score < rejectionThresholds.maxMarketGap &&
+			!rejectionReasons.includes("Whitespace is too limited to justify a new entry.")
+		) {
 			rejectionReasons.push("Whitespace is too limited to justify a new entry.");
 		}
-		if (candidate.evidence.risk.score > rejectionThresholds.maxRisk) {
+		if (
+			candidate.evidence.risk.score > rejectionThresholds.maxRisk &&
+			!rejectionReasons.includes("Risk dominates the upside at the current evidence quality.")
+		) {
 			rejectionReasons.push("Risk dominates the upside at the current evidence quality.");
 		}
-		if (candidate.evidence.monetizationPotential.score < rejectionThresholds.maxMonetization) {
+		if (
+			candidate.evidence.monetizationPotential.score < rejectionThresholds.maxMonetization &&
+			!rejectionReasons.includes("Monetization fit looks too weak for a first pass build.")
+		) {
 			rejectionReasons.push("Monetization fit looks too weak for a first pass build.");
 		}
 	}
+	const confidenceGaps = [
+		...(candidate.signalCoverage?.missingSources.map((source) => `Missing signal source: ${source}`) || []),
+		...candidate.missingDimensions.map((dimension) => `Missing evidence dimension: ${dimension}`),
+	];
 
 	return {
 		headline: `${candidate.title} is a ${candidate.decisionTier} opportunity with ${candidate.confidence}% confidence.`,
 		targetUser: candidate.targetUser,
 		coreProblem: candidate.coreProblem,
 		appConcept: candidate.appConcept,
+		buildThesis: candidate.highValueModel?.buildRecommendation,
 		supportingEvidenceSummary: [
 			candidate.evidence.demand.summary,
 			candidate.evidence.marketGap.summary,
 			candidate.evidence.monetizationPotential.summary,
 		],
+		strongestSupportingEvidence: candidate.highValueModel?.strongestSignals,
 		competitiveFraming: buildCompetitiveFraming(candidate),
 		monetizationHypothesis: buildMonetizationHypothesis(candidate),
 		primaryRisks: draft.riskNotes.length ? draft.riskNotes : [candidate.evidence.risk.summary],
+		blockers: candidate.highValueModel?.blockers || [],
+		confidenceGaps,
 		nextValidationSteps: draft.validationIdeas,
 		evidenceTrace,
 		rejectionReasons,
@@ -234,9 +282,26 @@ function buildBrief(candidate: Omit<RankedCandidate, "brief">, draft: DraftCandi
 
 function rankCandidate(draft: DraftCandidate): RankedCandidate {
 	const { dimensions, missingDimensions } = buildDimensions(draft);
-	const confidence = computeConfidence(dimensions, draft.corroboration);
-	const attractiveness = computeAttractiveness(dimensions);
-	const decisionTier = assignDecisionTier(attractiveness, confidence, dimensions.risk.score);
+	const highValueModel = buildHighValueOpportunitySummary({
+		title: draft.title,
+		demand: dimensions.demand.score,
+		competition: dimensions.competition.score,
+		marketGap: dimensions.marketGap.score,
+		monetizationPotential: dimensions.monetizationPotential.score,
+		implementationFeasibility: dimensions.implementationFeasibility.score,
+		risk: dimensions.risk.score,
+		trendMomentum: dimensions.trendMomentum.score,
+		supplyFreshness: dimensions.supplyFreshness.missing ? null : dimensions.supplyFreshness.score,
+		replacementPressure: dimensions.replacementPressure.missing ? null : dimensions.replacementPressure.score,
+		painIntensity: dimensions.painIntensity.score,
+		signalCoverage: draft.signalCoverage,
+		signals: draft.marketSignals,
+	});
+	const confidence = clampScore(
+		computeConfidence(dimensions, draft.corroboration, draft.signalCoverage) * 0.65 +
+			highValueModel.dimensions.evidenceConfidence.score * 0.35,
+	);
+	const attractiveness = clampScore(computeAttractiveness(dimensions) * 0.55 + highValueModel.overallScore * 0.45);
 	const candidateWithoutBrief = {
 		id: draft.id,
 		mode: draft.mode,
@@ -248,11 +313,15 @@ function rankCandidate(draft: DraftCandidate): RankedCandidate {
 		seed: draft.seed,
 		region: draft.region,
 		evidence: dimensions,
+		highValueModel,
+		marketSignals: draft.marketSignals,
+		signalCoverage: draft.signalCoverage,
 		missingDimensions,
 		attractiveness,
 		confidence,
-		decisionTier,
+		decisionTier: "monitor" as DecisionTier,
 	} satisfies Omit<RankedCandidate, "brief">;
+	candidateWithoutBrief.decisionTier = assignDecisionTier(candidateWithoutBrief);
 
 	return {
 		...candidateWithoutBrief,
@@ -636,6 +705,9 @@ export function runWorkflow(request: WorkflowRequest): WorkflowResult {
 		.sort((left, right) => {
 			if (right.decisionTier !== left.decisionTier) {
 				return tierSortOrder.indexOf(left.decisionTier) - tierSortOrder.indexOf(right.decisionTier);
+			}
+			if ((right.highValueModel?.overallScore || 0) !== (left.highValueModel?.overallScore || 0)) {
+				return (right.highValueModel?.overallScore || 0) - (left.highValueModel?.overallScore || 0);
 			}
 			if (right.attractiveness !== left.attractiveness) {
 				return right.attractiveness - left.attractiveness;
